@@ -1,0 +1,32 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/inventory-transactions",
+    "queryParameters": {
+      "start": { "matches": ".*" },
+      "end":   { "matches": ".*" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": [
+      {
+        "transactionId": "T-001",
+        "product": { "id": "P-100", "sku": "SKU-100", "name": "USB-C Cable" },
+        "productPricing": { "currency": "SGD", "unitPrice": 9.90, "totalPrice": 99.00 },
+        "source": { "id": "WH-01", "name": "Main Warehouse", "type": "WAREHOUSE" },
+        "destination": { "id": "ST-88", "name": "Store 88", "type": "STORE" },
+        "transactionDateTime": "2025-08-15T10:30:00Z"
+      },
+      {
+        "transactionId": "T-002",
+        "product": { "id": "P-101", "sku": "SKU-101", "name": "HDMI Cable" },
+        "productPricing": { "currency": "SGD", "unitPrice": 12.50, "totalPrice": 50.00 },
+        "source": { "id": "WH-01", "name": "Main Warehouse", "type": "WAREHOUSE" },
+        "destination": { "id": "ST-01", "name": "Store 01", "type": "STORE" },
+        "transactionDateTime": "2025-08-16T08:00:00Z"
+      }
+    ]
+  }
+}
