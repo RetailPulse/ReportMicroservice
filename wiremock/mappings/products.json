@@ -1,0 +1,28 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPath": "/api/products"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      {
+        "sku": "SKU123",
+        "description": "Sample product",
+        "category": "Electronics",
+        "subcategory": "Mobile",
+        "brand": "BrandA"
+      },
+      {
+        "sku": "SKU456",
+        "description": "Another product",
+        "category": "Home",
+        "subcategory": "Kitchen",
+        "brand": "BrandB"
+      }
+    ],
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+}
