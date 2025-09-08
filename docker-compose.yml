@@ -3,20 +3,27 @@ version: "3.8"
 services:
   mongo:
     image: mongo:7
-    container_name: mongo
     restart: always
     ports:
       - "27017:27017"
+    command: ["--bind_ip_all", "--auth"]
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: secret
       MONGO_INITDB_DATABASE: reportsdb
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "mongodb://admin:secret@localhost:27017/admin", "--eval", "db.runCommand({ ping: 1 })" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - retailpulse-network   # ✅ now on same network
 
   mongo-express:
     image: mongo-express
-    container_name: mongo-express
+    # container_name: mongo-express
     restart: always
     ports:
       - "8081:8081"
@@ -28,6 +35,24 @@ services:
       ME_CONFIG_BASICAUTH_PASSWORD: webpass
     depends_on:
       - mongo
+    networks:
+      - retailpulse-network   # ✅ same network
+
+  app-rp-report-service:
+    image: rp-report-service:v0.1.0
+    build:
+      context: .
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://admin:secret@mongo:27017/reportsdb?authSource=admin
+      SERVER_PORT: 8088
+      AUTH_SERVER_URL: http://app-iam:8081   # ensure app-iam is reachable (same network) if used
+    ports:
+      - "8088:8088"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - retailpulse-network
 
   wiremock:
     image: wiremock/wiremock:3.9.1
@@ -36,6 +61,12 @@ services:
     volumes:
       - ./wiremock:/home/wiremock
     command: [ "--verbose", "--root-dir", "/home/wiremock" ]
+    networks:
+      - retailpulse-network   # optional; add if your app calls wiremock via "wiremock"
 
 volumes:
   mongo_data:
+
+networks:
+  retailpulse-network:
+    driver: bridge

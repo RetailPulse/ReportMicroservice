@@ -1,0 +1,347 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: retailpulse
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongo-secret
+  namespace: retailpulse
+type: Opaque
+stringData:
+  MONGO_INITDB_ROOT_USERNAME: admin
+  MONGO_INITDB_ROOT_PASSWORD: secret
+  MONGO_INITDB_DATABASE: reportsdb
+  ME_CONFIG_BASICAUTH_USERNAME: webuser
+  ME_CONFIG_BASICAUTH_PASSWORD: webpass
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongo-pvc
+  namespace: retailpulse
+spec:
+  accessModes: [ "ReadWriteOnce" ]
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: standard   # uncomment/set to your cluster's class if needed
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo
+  namespace: retailpulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mongo }
+  template:
+    metadata:
+      labels: { app: mongo }
+    spec:
+      containers:
+        - name: mongo
+          image: mongo:7
+          args: [ "--bind_ip_all", "--auth" ]
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom: { secretKeyRef: { name: mongo-secret, key: MONGO_INITDB_ROOT_USERNAME } }
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: mongo-secret, key: MONGO_INITDB_ROOT_PASSWORD } }
+            - name: MONGO_INITDB_DATABASE
+              valueFrom: { secretKeyRef: { name: mongo-secret, key: MONGO_INITDB_DATABASE } }
+          volumeMounts:
+            - name: mongo-data
+              mountPath: /data/db
+          readinessProbe:
+            tcpSocket:
+              port: 27017
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 27017
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: mongo-data
+          persistentVolumeClaim:
+            claimName: mongo-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+  namespace: retailpulse
+spec:
+  selector: { app: mongo }
+  ports:
+    - name: mongodb
+      port: 27017
+      targetPort: 27017
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-express
+  namespace: retailpulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: mongo-express }
+  template:
+    metadata:
+      labels: { app: mongo-express }
+    spec:
+      containers:
+        - name: mongo-express
+          image: mongo-express
+          ports:
+            - containerPort: 8081
+          env:
+            - name: ME_CONFIG_MONGODB_SERVER
+              value: mongo
+            - name: ME_CONFIG_MONGODB_ADMINUSERNAME
+              valueFrom: { secretKeyRef: { name: mongo-secret, key: MONGO_INITDB_ROOT_USERNAME } }
+            - name: ME_CONFIG_MONGODB_ADMINPASSWORD
+              valueFrom: { secretKeyRef: { name: mongo-secret, key: MONGO_INITDB_ROOT_PASSWORD } }
+            - name: ME_CONFIG_BASICAUTH_USERNAME
+              valueFrom: { secretKeyRef: { name: mongo-secret, key: ME_CONFIG_BASICAUTH_USERNAME } }
+            - name: ME_CONFIG_BASICAUTH_PASSWORD
+              valueFrom: { secretKeyRef: { name: mongo-secret, key: ME_CONFIG_BASICAUTH_PASSWORD } }
+          readinessProbe:
+            httpGet: { path: "/", port: 8081 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: "/", port: 8081 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-express
+  namespace: retailpulse
+spec:
+  selector: { app: mongo-express }
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-rp-report-service
+  namespace: retailpulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: app-rp-report-service }
+  template:
+    metadata:
+      labels: { app: app-rp-report-service }
+    spec:
+      initContainers:
+        - name: wait-for-mongo
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for mongo:27017 ...";
+              until nc -zv mongo 27017 >/dev/null 2>&1; do sleep 2; done;
+              echo "Mongo is up";
+      containers:
+        - name: app
+          image: rp-report-service:v0.1.0
+          ports:
+            - containerPort: 8088
+          env:
+            - name: SPRING_DATA_MONGODB_URI
+              value: mongodb://admin:secret@mongo:27017/reportsdb?authSource=admin
+            - name: SERVER_PORT
+              value: "8088"
+            - name: AUTH_SERVER_URL
+              value: http://app-iam:8081
+          readinessProbe:
+            tcpSocket: { port: 8088 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: 8088 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-rp-report-service
+  namespace: retailpulse
+spec:
+  selector:
+    app: app-rp-report-service
+  ports:
+    - name: http
+      port: 8088        # service port (inside cluster)
+      targetPort: 8088  # container port
+      nodePort: 31088   # external port on each node (must be in 30000–32767)
+  type: NodePort
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wiremock-mappings
+  namespace: retailpulse
+data:
+  inventory-transactions.json: |
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/api/inventory-transactions",
+        "queryParameters": {
+          "start": {
+            "matches": ".*"},
+          "end": {
+            "matches": ".*"}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": [
+          {
+            "transactionId": "T-001",
+            "product": {
+              "id": "P-100",
+              "sku": "SKU-100",
+              "name": "USB-C Cable"},
+            "productPricing": {
+              "currency": "SGD",
+              "unitPrice": 9.90,
+              "totalPrice": 99.00},
+            "source": {
+              "id": "WH-01",
+              "name": "Main Warehouse",
+              "type": "WAREHOUSE"},
+            "destination": {
+              "id": "ST-88",
+              "name": "Store 88",
+              "type": "STORE"},
+            "transactionDateTime": "2025-08-15T10:30:00Z"
+          },
+          {
+            "transactionId": "T-002",
+            "product": {
+              "id": "P-101",
+              "sku": "SKU-101",
+              "name": "HDMI Cable"},
+            "productPricing": {
+              "currency": "SGD",
+              "unitPrice": 12.50,
+              "totalPrice": 50.00},
+            "source": {
+              "id": "WH-01",
+              "name": "Main Warehouse",
+              "type": "WAREHOUSE"},
+            "destination": {
+              "id": "ST-01",
+              "name": "Store 01",
+              "type": "STORE"},
+            "transactionDateTime": "2025-08-16T08:00:00Z"
+          }
+        ]
+      }
+    }
+  products.json: |
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/api/products"
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": [
+          {
+            "sku": "SKU123",
+            "description": "Sample product",
+            "category": "Electronics",
+            "subcategory": "Mobile",
+            "brand": "BrandA"
+          },
+          {
+            "sku": "SKU456",
+            "description": "Another product",
+            "category": "Home",
+            "subcategory": "Kitchen",
+            "brand": "BrandB"
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wiremock
+  namespace: retailpulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: wiremock }
+  template:
+    metadata:
+      labels: { app: wiremock }
+    spec:
+      containers:
+        - name: wiremock
+          image: wiremock/wiremock:3.9.1
+          args: [ "--verbose", "--root-dir", "/home/wiremock" ]
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: wiremock-data
+              mountPath: /home/wiremock
+            # ⬇️ Mount mappings from the ConfigMap so WireMock auto-loads them
+            - name: wiremock-mappings
+              mountPath: /home/wiremock/mappings
+          readinessProbe:
+            httpGet: { path: "/__admin", port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: "/__admin", port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: wiremock-data
+          emptyDir: { }
+        - name: wiremock-mappings
+          configMap:
+            name: wiremock-mappings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wiremock
+  namespace: retailpulse
+spec:
+  selector: { app: wiremock }
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 8080
+  type: ClusterIP

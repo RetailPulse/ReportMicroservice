@@ -2,7 +2,7 @@ server.port: 8088
 
 inventory:
   api:
-    base-url: http://localhost:9090
+    base-url: http://wiremock:9090
 
 auth:
   enabled: false
@@ -12,7 +12,7 @@ auth:
 spring:
   data:
     mongodb:
-      uri: mongodb://admin:secret@localhost:27017/reportsdb?authSource=admin
+      uri: mongodb://admin:secret@mongo:27017/reportsdb?authSource=admin
       database: reportsdb
 app:
   gridfs:
@@ -29,3 +29,11 @@ logging:
     feign: DEBUG
   file:
     name: logs/report-service.log
+
+logbook:
+  format.style: json
+  obfuscate:
+    parameters: [password, token, authorization]
+    headers: [Authorization, Cookie, Set-Cookie]
+  predicate:
+    exclude:
