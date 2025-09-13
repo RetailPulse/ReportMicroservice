@@ -2,10 +2,10 @@ server.port: 8088
 
 inventory:
   api:
-    base-url: http://wiremock:9090
+    base-url: http://svc-rp-inventory:8085
 
 auth:
-  enabled: false
+  enabled: true
   origin: "http://localhost:4200"
   jwt.key.set.uri: http://app-iam:8081/oauth2/jwks
 
@@ -23,17 +23,10 @@ logging:
     root: INFO
     org:
       springframework:
-        security: TRACE
+        security: INFO
     com.retailpulse: DEBUG
-    com.example.report.infrastructure.feign: DEBUG
-    feign: DEBUG
+    com.example.report.infrastructure.feign: INFO
+    feign: INFO
   file:
     name: logs/report-service.log
 
-logbook:
-  format.style: json
-  obfuscate:
-    parameters: [password, token, authorization]
-    headers: [Authorization, Cookie, Set-Cookie]
-  predicate:
-    exclude:

@@ -3,9 +3,8 @@ package com.retailpulse.service;
 import com.retailpulse.controller.exception.ApplicationException;
 import com.retailpulse.domain.ReportDocument;
 import com.retailpulse.domain.port.InventoryPort;
-import com.retailpulse.domain.port.ProductPort;
 import com.retailpulse.dto.InventoryTransactionDto;
-import com.retailpulse.dto.ProductDto;
+import com.retailpulse.dto.ProductResponseDto;
 import com.retailpulse.dto.ReportSummaryDto;
 import com.retailpulse.infrastructure.ReportDocumentRepository;
 import com.retailpulse.service.report.ExcelReportExportService;
@@ -32,12 +31,10 @@ import java.util.List;
 @Slf4j
 public class ReportService {
     private final InventoryPort inventoryPort;
-    private final ProductPort productPort;
     private final ReportDocumentRepository reportDocumentRepository;
 
-    public ReportService(InventoryPort inventoryPort, ProductPort productPort, ReportDocumentRepository reportDocumentRepository) {
+    public ReportService(InventoryPort inventoryPort, ReportDocumentRepository reportDocumentRepository) {
         this.inventoryPort = inventoryPort;
-        this.productPort = productPort;
         this.reportDocumentRepository = reportDocumentRepository;
     }
 
@@ -47,8 +44,8 @@ public class ReportService {
                 DateUtil.convertInstantToString(endDateTime, DateUtil.DATE_TIME_FORMAT));
     }
 
-    public List<ProductDto> findAllProducts() {
-        return productPort.fetchAllProducts();
+    public List<ProductResponseDto> findAllProducts() {
+        return inventoryPort.fetchAllProducts();
     }
 
     public void exportInventoryTransactionsReport(HttpServletResponse response, Instant start, Instant end, String format) throws IOException {
@@ -59,7 +56,7 @@ public class ReportService {
     }
 
     public void exportProductReport(HttpServletResponse response, String format) throws IOException {
-        List<ProductDto> data = findAllProducts();
+        List<ProductResponseDto> data = findAllProducts();
         String title = "Product Report";
         String[] headers = {"S/No.", "SKU", "Description", "Category", "Subcategory", "Brand"};
         exportReport(response, null, null, format, data, title, headers, new ProductDataExtractor());

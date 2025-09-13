@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-retailpulse
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wiremock-mappings
+  namespace: ns-retailpulse
+data:
+  inventory-transactions.json: |
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/api/inventory-transactions",
+        "queryParameters": {
+          "start": {
+            "matches": ".*"},
+          "end": {
+            "matches": ".*"}
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": [
+          {
+            "transactionId": "T-001",
+            "product": {
+              "id": "P-100",
+              "sku": "SKU-100",
+              "name": "USB-C Cable"},
+            "productPricing": {
+              "currency": "SGD",
+              "unitPrice": 9.90,
+              "totalPrice": 99.00},
+            "source": {
+              "id": "WH-01",
+              "name": "Main Warehouse",
+              "type": "WAREHOUSE"},
+            "destination": {
+              "id": "ST-88",
+              "name": "Store 88",
+              "type": "STORE"},
+            "transactionDateTime": "2025-08-15T10:30:00Z"
+          },
+          {
+            "transactionId": "T-002",
+            "product": {
+              "id": "P-101",
+              "sku": "SKU-101",
+              "name": "HDMI Cable"},
+            "productPricing": {
+              "currency": "SGD",
+              "unitPrice": 12.50,
+              "totalPrice": 50.00},
+            "source": {
+              "id": "WH-01",
+              "name": "Main Warehouse",
+              "type": "WAREHOUSE"},
+            "destination": {
+              "id": "ST-01",
+              "name": "Store 01",
+              "type": "STORE"},
+            "transactionDateTime": "2025-08-16T08:00:00Z"
+          }
+        ]
+      }
+    }
+  products.json: |
+    {
+      "request": {
+        "method": "GET",
+        "urlPath": "/api/products"
+      },
+      "response": {
+        "status": 200,
+        "jsonBody": [
+          {
+            "sku": "SKU123",
+            "description": "Sample product",
+            "category": "Electronics",
+            "subcategory": "Mobile",
+            "brand": "BrandA"
+          },
+          {
+            "sku": "SKU456",
+            "description": "Another product",
+            "category": "Home",
+            "subcategory": "Kitchen",
+            "brand": "BrandB"
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wiremock
+  namespace: ns-retailpulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: wiremock }
+  template:
+    metadata:
+      labels: { app: wiremock }
+    spec:
+      containers:
+        - name: wiremock
+          image: wiremock/wiremock:3.9.1
+          args: [ "--verbose", "--root-dir", "/home/wiremock" ]
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: wiremock-data
+              mountPath: /home/wiremock
+            # ⬇️ Mount mappings from the ConfigMap so WireMock auto-loads them
+            - name: wiremock-mappings
+              mountPath: /home/wiremock/mappings
+          readinessProbe:
+            httpGet: { path: "/__admin", port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: "/__admin", port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: wiremock-data
+          emptyDir: { }
+        - name: wiremock-mappings
+          configMap:
+            name: wiremock-mappings
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wiremock
+  namespace: ns-retailpulse
+spec:
+  selector: { app: wiremock }
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 8080
+  type: ClusterIP

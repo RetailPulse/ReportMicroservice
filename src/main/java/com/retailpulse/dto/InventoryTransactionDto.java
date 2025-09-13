@@ -1,7 +1,7 @@
 package com.retailpulse.dto;
 
 public record InventoryTransactionDto(String transactionId,
-                                      ProductDto product,
+                                      ProductResponseDto product,
                                       ProductPricingDto productPricing,
                                       BusinessEntityDto source,
                                       BusinessEntityDto destination,
