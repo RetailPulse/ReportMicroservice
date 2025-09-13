@@ -1,7 +1,7 @@
 package com.retailpulse.infrastructure;
 
 import com.retailpulse.dto.InventoryTransactionDto;
-import com.retailpulse.dto.ProductDto;
+import com.retailpulse.dto.ProductResponseDto;
 import com.retailpulse.infrastructure.config.FeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,13 +20,13 @@ import java.util.List;
 )
 public interface InventoryFeignClient {
 
-    @GetMapping("/api/inventory-transactions")
+    @GetMapping("/api/inventoryTransaction")
     List<InventoryTransactionDto> getTransactions(
             @RequestParam("start") String start,
             @RequestParam("end") String end
     );
 
     @GetMapping("/api/products")
-    List<ProductDto> getAllProducts();
+    List<ProductResponseDto> getAllProducts();
 
 }

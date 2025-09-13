@@ -2,17 +2,17 @@ server.port: 8088
 
 inventory:
   api:
-    base-url: http://localhost:9090
+    base-url: http://svc-rp-inventory:8085
 
 auth:
-  enabled: false
+  enabled: true
   origin: "http://localhost:4200"
   jwt.key.set.uri: http://app-iam:8081/oauth2/jwks
 
 spring:
   data:
     mongodb:
-      uri: mongodb://admin:secret@localhost:27017/reportsdb?authSource=admin
+      uri: mongodb://admin:secret@mongo:27017/reportsdb?authSource=admin
       database: reportsdb
 app:
   gridfs:
@@ -23,9 +23,10 @@ logging:
     root: INFO
     org:
       springframework:
-        security: TRACE
+        security: INFO
     com.retailpulse: DEBUG
-    com.example.report.infrastructure.feign: DEBUG
-    feign: DEBUG
+    com.example.report.infrastructure.feign: INFO
+    feign: INFO
   file:
     name: logs/report-service.log
+

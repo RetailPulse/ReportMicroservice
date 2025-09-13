@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-retailpulse
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rp-report-service-config
+  namespace: ns-retailpulse
+data:
+  application.yaml: |
+    server.port: 8088
+
+    inventory:
+      api:
+        base-url: http://svc-rp-inventory:8085
+    
+    auth:
+      enabled: true
+      origin: "http://localhost:4200"
+      jwt.key.set.uri: http://app-iam:8081/oauth2/jwks
+    
+    spring:
+      data:
+        mongodb:
+          uri: mongodb://admin:secret@mongo:27017/reportsdb?authSource=admin
+          database: reportsdb
+    app:
+      gridfs:
+        bucket: reports # GridFS bucket name (prefixes fs.files/fs.chunks)
+    
+    logging:
+      level:
+        root: INFO
+        org:
+          springframework:
+            security: INFO
+        com.retailpulse: DEBUG
+        com.example.report.infrastructure.feign: INFO
+        feign: INFO
+      file:
+        name: logs/report-service.log
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-rp-report-service
+  namespace: ns-retailpulse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app-rp-report-service
+  template:
+    metadata:
+      labels:
+        app: app-rp-report-service
+    spec:
+      containers:
+        - name: rp-report-service
+          image: rp-report-service:v0.1.0
+          ports:
+            - containerPort: 8088
+          env:
+            # Make Spring read /config/application.yaml
+            - name: SPRING_CONFIG_ADDITIONAL_LOCATION
+              value: "file:/config/"
+            - name: SPRING_DATA_MONGODB_URI
+              value: mongodb://admin:secret@mongo:27017/reportsdb?authSource=admin
+            - name: SERVER_PORT
+              value: "8088"
+            - name: AUTH_SERVER_URL
+              value: http://app-iam:8081
+          volumeMounts:
+            - name: app-config
+              mountPath: /config
+          readinessProbe:
+            tcpSocket:
+              port: 8088
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8088
+            initialDelaySeconds: 30
+            periodSeconds: 20
+      volumes:
+        - name: app-config
+          configMap:
+            name: rp-report-service-config
+            items:
+              - key: application.yaml
+                path: application.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-rp-report-service
+  namespace: ns-retailpulse
+spec:
+  selector:
+    app: app-rp-report-service
+  ports:
+    - name: http
+      port: 8088        # service port (inside cluster)
+      targetPort: 8088  # container port
+      nodePort: 31088   # external port on each node (must be in 30000–32767)
+  type: NodePort

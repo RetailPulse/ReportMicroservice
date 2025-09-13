@@ -1,10 +1,10 @@
 package com.retailpulse.service.report.extractor;
 
-import com.retailpulse.dto.ProductDto;
+import com.retailpulse.dto.ProductResponseDto;
 
-public class ProductDataExtractor implements TableDataExtractor<ProductDto> {
+public class ProductDataExtractor implements TableDataExtractor<ProductResponseDto> {
     @Override
-    public Object[] getRowData(ProductDto item, int serialNumber) {
+    public Object[] getRowData(ProductResponseDto item, int serialNumber) {
         return new Object[]{
                 serialNumber,
                 item.sku(),
